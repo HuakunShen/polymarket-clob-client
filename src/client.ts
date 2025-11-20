@@ -2,6 +2,8 @@ import { Wallet } from "@ethersproject/wallet";
 import { JsonRpcSigner } from "@ethersproject/providers";
 import { SignatureType, SignedOrder } from "@polymarket/order-utils";
 import { BuilderConfig, BuilderHeaderPayload } from "@polymarket/builder-signing-sdk";
+import type { AxiosProxyConfig } from "axios";
+
 import {
     ApiKeyCreds,
     ApiKeysResponse,
@@ -63,7 +65,12 @@ import {
     post,
     RequestOptions,
 } from "./http-helpers";
-import { BUILDER_AUTH_FAILED, BUILDER_AUTH_NOT_AVAILABLE, L1_AUTH_UNAVAILABLE_ERROR, L2_AUTH_NOT_AVAILABLE } from "./errors";
+import {
+    BUILDER_AUTH_FAILED,
+    BUILDER_AUTH_NOT_AVAILABLE,
+    L1_AUTH_UNAVAILABLE_ERROR,
+    L2_AUTH_NOT_AVAILABLE,
+} from "./errors";
 import {
     generateOrderBookSummaryHash,
     isTickSizeSmaller,
@@ -127,6 +134,11 @@ import { OrderBuilder } from "./order-builder/builder";
 import { END_CURSOR, INITIAL_CURSOR } from "./constants";
 import { calculateBuyMarketPrice, calculateSellMarketPrice } from "./order-builder/helpers";
 
+export interface ClobClientOptions {
+    proxy?: AxiosProxyConfig | false;
+    proxyUrl?: string;
+}
+
 export class ClobClient {
     readonly host: string;
 
@@ -151,6 +163,10 @@ export class ClobClient {
     readonly useServerTime?: boolean;
 
     readonly builderConfig?: BuilderConfig;
+
+    private proxy?: AxiosProxyConfig | false;
+
+    private proxyUrl?: string;
 
     // eslint-disable-next-line max-params
     constructor(
@@ -191,9 +207,28 @@ export class ClobClient {
         }
     }
 
+    /**
+     * Set HTTP proxy configuration for all subsequent requests
+     * @param options - Proxy configuration options
+     */
+    public setProxy(options: ClobClientOptions): void {
+        this.proxy = options.proxy;
+        this.proxyUrl = options.proxyUrl;
+    }
+
     // Public endpoints
     public async getOk(): Promise<any> {
         return this.get(`${this.host}/`);
+    }
+
+    /**
+     * Test HTTP proxy by making a request to an IP detection service
+     * @returns Promise<{ip: string}> - The IP address used for the request
+     */
+    public async testProxy(): Promise<{ ip: string }> {
+        // Using a free IP detection service that returns JSON
+        const ipServiceUrl = "https://api.ipify.org?format=json";
+        return this.get(ipServiceUrl);
     }
 
     public async getServerTime(): Promise<number> {
@@ -1311,19 +1346,17 @@ export class ClobClient {
     private async _getBuilderHeaders(
         method: string,
         path: string,
-        body?: string
+        body?: string,
     ): Promise<BuilderHeaderPayload | undefined> {
-        return (this.builderConfig as BuilderConfig).generateBuilderHeaders(
-            method,
-            path,
-            body,
-        );
+        return (this.builderConfig as BuilderConfig).generateBuilderHeaders(method, path, body);
     }
 
     // http methods
     private async get(endpoint: string, options?: RequestOptions) {
         return get(endpoint, {
             ...options,
+            proxy: options?.proxy ?? this.proxy,
+            proxyUrl: options?.proxyUrl ?? this.proxyUrl,
             params: { ...options?.params, geo_block_token: this.geoBlockToken },
         });
     }
@@ -1331,6 +1364,8 @@ export class ClobClient {
     private async post(endpoint: string, options?: RequestOptions) {
         return post(endpoint, {
             ...options,
+            proxy: options?.proxy ?? this.proxy,
+            proxyUrl: options?.proxyUrl ?? this.proxyUrl,
             params: { ...options?.params, geo_block_token: this.geoBlockToken },
         });
     }
@@ -1338,6 +1373,8 @@ export class ClobClient {
     private async del(endpoint: string, options?: RequestOptions) {
         return del(endpoint, {
             ...options,
+            proxy: options?.proxy ?? this.proxy,
+            proxyUrl: options?.proxyUrl ?? this.proxyUrl,
             params: { ...options?.params, geo_block_token: this.geoBlockToken },
         });
     }
