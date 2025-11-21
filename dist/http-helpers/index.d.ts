@@ -1,0 +1,20 @@
+import { AxiosProxyConfig, AxiosRequestHeaders, Method } from "axios";
+import { DropNotificationParams, OrdersScoringParams } from "src/types";
+export declare const GET = "GET";
+export declare const POST = "POST";
+export declare const DELETE = "DELETE";
+export declare const PUT = "PUT";
+export declare const request: (endpoint: string, method: Method, options?: RequestOptions) => Promise<any>;
+export type QueryParams = Record<string, any>;
+export interface RequestOptions {
+    headers?: AxiosRequestHeaders;
+    data?: any;
+    params?: QueryParams;
+    proxy?: AxiosProxyConfig | false;
+    proxyUrl?: string;
+}
+export declare const post: (endpoint: string, options?: RequestOptions) => Promise<any>;
+export declare const get: (endpoint: string, options?: RequestOptions) => Promise<any>;
+export declare const del: (endpoint: string, options?: RequestOptions) => Promise<any>;
+export declare const parseOrdersScoringParams: (orderScoringParams?: OrdersScoringParams) => QueryParams;
+export declare const parseDropNotificationParams: (dropNotificationParams?: DropNotificationParams) => QueryParams;
