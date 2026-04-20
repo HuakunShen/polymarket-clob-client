@@ -9,19 +9,19 @@ Typescript client for the Polymarket CLOB
 ### Usage
 
 ```ts
-//npm install @polymarket/clob-client
-//npm install ethers
-//Client initialization example and dumping API Keys
+// npm install @polymarket/clob-client
+// npm install ethers
+// Client initialization example and dumping API Keys
 
 import { ApiKeyCreds, ClobClient, OrderType, Side, } from "@polymarket/clob-client";
 import { Wallet } from "@ethersproject/wallet";
 
 const host = 'https://clob.polymarket.com';
-const funder = '';//This is your Polymarket Profile Address, where you send UDSC to. 
-const signer = new Wallet(""); //This is your Private Key. If using email login export from https://reveal.magic.link/polymarket otherwise export from your Web3 Application
+const funder = ''; // This is your Polymarket Profile Address, where you send UDSC to. 
+const signer = new Wallet(""); // This is your Private Key. If using email login export from https://reveal.magic.link/polymarket otherwise export from your Web3 Application
 
 
-//In general don't create a new API key, always derive or createOrDerive
+// In general don't create a new API key, always derive or createOrDerive
 const creds = new ClobClient(host, 137, signer).createOrDeriveApiKey();
 
 //0: Browser Wallet(Metamask, Coinbase Wallet, etc)
@@ -46,3 +46,51 @@ const signatureType = 1;
 ```
 
 See [examples](examples/) for more information
+
+### Using viem WalletClient
+
+```ts
+import { ClobClient } from "@polymarket/clob-client";
+import { createWalletClient, http } from "viem";
+import { polygon } from "viem/chains";
+import { privateKeyToAccount } from "viem/accounts";
+
+const host = "https://clob.polymarket.com";
+const account = privateKeyToAccount("0x...");
+const walletClient = createWalletClient({
+    account,
+    chain: polygon,
+    transport: http(),
+});
+
+const clobClient = new ClobClient(host, 137, walletClient);
+```
+
+### Error Handling
+
+By default, API errors are returned as `{ error: "...", status: ... }` objects. To have the client throw errors instead, pass `throwOnError: true` as the last constructor argument:
+
+```ts
+import { ClobClient, ApiError } from "@polymarket/clob-client";
+
+const clobClient = new ClobClient(
+    host, 137, signer, await creds, signatureType, funder,
+    undefined, // geoBlockToken
+    undefined, // useServerTime
+    undefined, // builderConfig
+    undefined, // getSigner
+    undefined, // retryOnError
+    undefined, // tickSizeTtlMs
+    true,      // throwOnError
+);
+
+try {
+    const book = await clobClient.getOrderBook(tokenID);
+} catch (e) {
+    if (e instanceof ApiError) {
+        console.log(e.message); // "No orderbook exists for the requested token id"
+        console.log(e.status);  // 404
+        console.log(e.data);    // full error response object from the API
+    }
+}
+```

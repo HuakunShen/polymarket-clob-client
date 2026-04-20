@@ -1,24 +1,24 @@
-import type { JsonRpcSigner } from "@ethersproject/providers";
-import type { Wallet } from "@ethersproject/wallet";
-import { parseUnits } from "@ethersproject/units";
+import { parseUnits } from "viem";
+import { COLLATERAL_TOKEN_DECIMALS, getContractConfig } from "../config.ts";
+import type { OrderData, SignedOrder } from "../order-utils/index.ts";
 import {
     ExchangeOrderBuilder,
-    SignatureType,
+    type SignatureType,
     Side as UtilsSide,
-} from "@polymarket/order-utils";
-import type { OrderData, SignedOrder } from "@polymarket/order-utils";
-import { Side, OrderType } from "../types.ts";
+} from "../order-utils/index.ts";
+import type { ClobSigner } from "../signer.ts";
+import { getSignerAddress } from "../signer.ts";
 import type {
-    UserOrder,
     Chain,
-    UserMarketOrder,
-    TickSize,
-    RoundConfig,
     CreateOrderOptions,
     OrderSummary,
+    RoundConfig,
+    TickSize,
+    UserMarketOrder,
+    UserOrder,
 } from "../types.ts";
+import { OrderType, Side } from "../types.ts";
 import { decimalPlaces, roundDown, roundNormal, roundUp } from "../utilities.ts";
-import { COLLATERAL_TOKEN_DECIMALS, getContractConfig } from "../config.ts";
 
 export const ROUNDING_CONFIG: Record<TickSize, RoundConfig> = {
     "0.1": {
@@ -44,7 +44,7 @@ export const ROUNDING_CONFIG: Record<TickSize, RoundConfig> = {
 };
 
 /**
- * Generate and sign a order
+ * Generate and sign an order
  *
  * @param signer
  * @param exchangeAddress ctf exchange contract address
@@ -53,7 +53,7 @@ export const ROUNDING_CONFIG: Record<TickSize, RoundConfig> = {
  * @returns SignedOrder
  */
 export const buildOrder = async (
-    signer: Wallet | JsonRpcSigner,
+    signer: ClobSigner,
     exchangeAddress: string,
     chainId: number,
     orderData: OrderData,
@@ -87,23 +87,22 @@ export const getOrderRawAmounts = (
             rawMakerAmt,
             rawTakerAmt,
         };
-    } else {
-        const rawMakerAmt = roundDown(size, roundConfig.size);
-
-        let rawTakerAmt = rawMakerAmt * rawPrice;
-        if (decimalPlaces(rawTakerAmt) > roundConfig.amount) {
-            rawTakerAmt = roundUp(rawTakerAmt, roundConfig.amount + 4);
-            if (decimalPlaces(rawTakerAmt) > roundConfig.amount) {
-                rawTakerAmt = roundDown(rawTakerAmt, roundConfig.amount);
-            }
-        }
-
-        return {
-            side: UtilsSide.SELL,
-            rawMakerAmt,
-            rawTakerAmt,
-        };
     }
+    const rawMakerAmt = roundDown(size, roundConfig.size);
+
+    let rawTakerAmt = rawMakerAmt * rawPrice;
+    if (decimalPlaces(rawTakerAmt) > roundConfig.amount) {
+        rawTakerAmt = roundUp(rawTakerAmt, roundConfig.amount + 4);
+        if (decimalPlaces(rawTakerAmt) > roundConfig.amount) {
+            rawTakerAmt = roundDown(rawTakerAmt, roundConfig.amount);
+        }
+    }
+
+    return {
+        side: UtilsSide.SELL,
+        rawMakerAmt,
+        rawTakerAmt,
+    };
 };
 
 /**
@@ -163,14 +162,14 @@ export const buildOrderCreationArgs = async (
 };
 
 export const createOrder = async (
-    eoaSigner: Wallet | JsonRpcSigner,
+    eoaSigner: ClobSigner,
     chainId: Chain,
     signatureType: SignatureType,
     funderAddress: string | undefined,
     userOrder: UserOrder,
     options: CreateOrderOptions,
 ): Promise<SignedOrder> => {
-    const eoaSignerAddress = await eoaSigner.getAddress();
+    const eoaSignerAddress = await getSignerAddress(eoaSigner);
 
     // If funder address is not given, use the signer address
     const maker = funderAddress === undefined ? eoaSignerAddress : funderAddress;
@@ -214,22 +213,21 @@ export const getMarketOrderRawAmounts = (
             rawMakerAmt,
             rawTakerAmt,
         };
-    } else {
-        const rawMakerAmt = roundDown(amount, roundConfig.size);
-        let rawTakerAmt = rawMakerAmt * rawPrice;
-        if (decimalPlaces(rawTakerAmt) > roundConfig.amount) {
-            rawTakerAmt = roundUp(rawTakerAmt, roundConfig.amount + 4);
-            if (decimalPlaces(rawTakerAmt) > roundConfig.amount) {
-                rawTakerAmt = roundDown(rawTakerAmt, roundConfig.amount);
-            }
-        }
-
-        return {
-            side: UtilsSide.SELL,
-            rawMakerAmt,
-            rawTakerAmt,
-        };
     }
+    const rawMakerAmt = roundDown(amount, roundConfig.size);
+    let rawTakerAmt = rawMakerAmt * rawPrice;
+    if (decimalPlaces(rawTakerAmt) > roundConfig.amount) {
+        rawTakerAmt = roundUp(rawTakerAmt, roundConfig.amount + 4);
+        if (decimalPlaces(rawTakerAmt) > roundConfig.amount) {
+            rawTakerAmt = roundDown(rawTakerAmt, roundConfig.amount);
+        }
+    }
+
+    return {
+        side: UtilsSide.SELL,
+        rawMakerAmt,
+        rawTakerAmt,
+    };
 };
 
 /**
@@ -289,14 +287,14 @@ export const buildMarketOrderCreationArgs = async (
 };
 
 export const createMarketOrder = async (
-    eoaSigner: Wallet | JsonRpcSigner,
+    eoaSigner: ClobSigner,
     chainId: Chain,
     signatureType: SignatureType,
     funderAddress: string | undefined,
     userMarketOrder: UserMarketOrder,
     options: CreateOrderOptions,
 ): Promise<SignedOrder> => {
-    const eoaSignerAddress = await eoaSigner.getAddress();
+    const eoaSignerAddress = await getSignerAddress(eoaSigner);
 
     // If funder address is not given, use the signer address
     const maker = funderAddress === undefined ? eoaSignerAddress : funderAddress;
@@ -343,15 +341,15 @@ export const calculateBuyMarketPrice = (
     */
     for (let i = positions.length - 1; i >= 0; i--) {
         const p = positions[i];
-        sum += parseFloat(p.size) * parseFloat(p.price);
+        sum += Number.parseFloat(p.size) * Number.parseFloat(p.price);
         if (sum >= amountToMatch) {
-            return parseFloat(p.price);
+            return Number.parseFloat(p.price);
         }
     }
     if (orderType === OrderType.FOK) {
         throw new Error("no match");
     }
-    return parseFloat(positions[0].price);
+    return Number.parseFloat(positions[0].price);
 };
 
 /**
@@ -380,13 +378,13 @@ export const calculateSellMarketPrice = (
     */
     for (let i = positions.length - 1; i >= 0; i--) {
         const p = positions[i];
-        sum += parseFloat(p.size);
+        sum += Number.parseFloat(p.size);
         if (sum >= amountToMatch) {
-            return parseFloat(p.price);
+            return Number.parseFloat(p.price);
         }
     }
     if (orderType === OrderType.FOK) {
         throw new Error("no match");
     }
-    return parseFloat(positions[0].price);
+    return Number.parseFloat(positions[0].price);
 };

@@ -1,8 +1,13 @@
-/* eslint-disable max-depth */
-import axios from "axios";
 import type { Method } from "axios";
-import type { DropNotificationParams, OrdersScoringParams, SimpleHeaders } from "../types.ts";
+import axios from "axios";
 import { isBrowser } from "browser-or-node";
+import type {
+    DropNotificationParams,
+    GetRfqQuotesParams,
+    GetRfqRequestsParams,
+    OrdersScoringParams,
+    SimpleHeaders,
+} from "../types.ts";
 
 export const GET = "GET";
 export const POST = "POST";
@@ -14,14 +19,14 @@ const overloadHeaders = (method: Method, headers?: SimpleHeaders) => {
         return;
     }
 
-    if (!headers || typeof headers === undefined) {
+    if (!headers || typeof headers === "undefined") {
         headers = {};
     }
 
     if (headers) {
-        headers["User-Agent"] = `@polymarket/clob-client`;
-        headers["Accept"] = "*/*";
-        headers["Connection"] = "keep-alive";
+        headers["User-Agent"] = "@polymarket/clob-client";
+        headers.Accept = "*/*";
+        headers.Connection = "keep-alive";
         headers["Content-Type"] = "application/json";
 
         if (method === GET) {
@@ -49,7 +54,20 @@ export interface RequestOptions {
     params?: QueryParams;
 }
 
-export const post = async (endpoint: string, options?: RequestOptions): Promise<any> => {
+const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+const isTransientAxiosError = (err: unknown): boolean => {
+    if (!axios.isAxiosError(err)) return false;
+    if (!err.response) return true; // network error
+    const code = (err.code ?? "").toString();
+    return ["ECONNABORTED", "ENETUNREACH", "EAI_AGAIN", "ETIMEDOUT"].includes(code);
+};
+
+export const post = async (
+    endpoint: string,
+    options?: RequestOptions,
+    retryOnError?: boolean,
+): Promise<any> => {
     try {
         const resp = await request(
             endpoint,
@@ -60,6 +78,21 @@ export const post = async (endpoint: string, options?: RequestOptions): Promise<
         );
         return resp.data;
     } catch (err: unknown) {
+        if (retryOnError && isTransientAxiosError(err)) {
+            await sleep(30);
+            try {
+                const resp = await request(
+                    endpoint,
+                    POST,
+                    options?.headers,
+                    options?.data,
+                    options?.params,
+                );
+                return resp.data;
+            } catch (retryErr: unknown) {
+                return errorHandling(retryErr);
+            }
+        }
         return errorHandling(err);
     }
 };
@@ -88,18 +121,18 @@ export const del = async (endpoint: string, options?: RequestOptions): Promise<a
     }
 };
 
+export const put = async (endpoint: string, options?: RequestOptions): Promise<any> => {
+    try {
+        const resp = await request(endpoint, PUT, options?.headers, options?.data, options?.params);
+        return resp.data;
+    } catch (err: unknown) {
+        return errorHandling(err);
+    }
+};
+
 const errorHandling = (err: unknown) => {
     if (axios.isAxiosError(err)) {
         if (err.response) {
-            console.error(
-                "[CLOB Client] request error",
-                JSON.stringify({
-                    status: err.response?.status,
-                    statusText: err.response?.statusText,
-                    data: err.response?.data,
-                    config: err.response?.config,
-                }),
-            );
             if (err.response?.data) {
                 if (
                     typeof err.response?.data === "string" ||
@@ -107,7 +140,7 @@ const errorHandling = (err: unknown) => {
                 ) {
                     return { error: err.response?.data, status: err.response?.status };
                 }
-                if (!Object.prototype.hasOwnProperty.call(err.response?.data, "error")) {
+                if (!Object.hasOwn(err.response?.data, "error")) {
                     return { error: err.response?.data, status: err.response?.status };
                 }
                 // in this case the field 'error' is included
@@ -116,17 +149,10 @@ const errorHandling = (err: unknown) => {
         }
 
         if (err.message) {
-            console.error(
-                "[CLOB Client] request error",
-                JSON.stringify({
-                    error: err.message,
-                }),
-            );
             return { error: err.message };
         }
     }
 
-    console.error("[CLOB Client] request error", err);
     return { error: err };
 };
 
@@ -134,7 +160,7 @@ export const parseOrdersScoringParams = (orderScoringParams?: OrdersScoringParam
     const params: QueryParams = {};
     if (orderScoringParams !== undefined) {
         if (orderScoringParams.orderIds !== undefined) {
-            params["order_ids"] = orderScoringParams?.orderIds.join(",");
+            params.order_ids = orderScoringParams?.orderIds.join(",");
         }
     }
     return params;
@@ -146,8 +172,43 @@ export const parseDropNotificationParams = (
     const params: QueryParams = {};
     if (dropNotificationParams !== undefined) {
         if (dropNotificationParams.ids !== undefined) {
-            params["ids"] = dropNotificationParams?.ids.join(",");
+            params.ids = dropNotificationParams?.ids.join(",");
         }
     }
+    return params;
+};
+
+export const parseRfqQuotesParams = (rfqQuotesParams?: GetRfqQuotesParams): QueryParams => {
+    if (!rfqQuotesParams) return {};
+
+    const params: QueryParams = { ...rfqQuotesParams };
+
+    // Convert array fields to comma-separated strings
+    if (rfqQuotesParams.quoteIds) {
+        params.quoteIds = rfqQuotesParams.quoteIds.join(",");
+    }
+    if (rfqQuotesParams.markets) {
+        params.markets = rfqQuotesParams.markets.join(",");
+    }
+    if (rfqQuotesParams.requestIds) {
+        params.requestIds = rfqQuotesParams.requestIds.join(",");
+    }
+
+    return params;
+};
+
+export const parseRfqRequestsParams = (rfqRequestsParams?: GetRfqRequestsParams): QueryParams => {
+    if (!rfqRequestsParams) return {};
+
+    const params: QueryParams = { ...rfqRequestsParams };
+
+    // Convert array fields to comma-separated strings
+    if (rfqRequestsParams.requestIds) {
+        params.requestIds = rfqRequestsParams.requestIds.join(",");
+    }
+    if (rfqRequestsParams.markets) {
+        params.markets = rfqRequestsParams.markets.join(",");
+    }
+
     return params;
 };

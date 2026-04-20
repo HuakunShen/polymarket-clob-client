@@ -1,4 +1,4 @@
-import type { SignatureType, SignedOrder } from "@polymarket/order-utils";
+import type { SignatureType, SignedOrder } from "./order-utils/index.ts";
 
 export interface ApiKeyCreds {
     key: string;
@@ -10,6 +10,10 @@ export interface ApiKeyRaw {
     apiKey: string;
     secret: string;
     passphrase: string;
+}
+
+export interface ReadonlyApiKeyResponse {
+    apiKey: string;
 }
 
 export interface L2HeaderArgs {
@@ -37,7 +41,6 @@ export interface L2PolyHeader extends SimpleHeaders {
     POLY_PASSPHRASE: string;
 }
 
-
 // Builder API key verification
 export interface L2WithBuilderHeader extends L2PolyHeader {
     POLY_BUILDER_API_KEY: string;
@@ -61,6 +64,7 @@ export enum OrderType {
 export interface PostOrdersArgs {
     order: SignedOrder;
     orderType: OrderType;
+    postOnly?: boolean;
 }
 
 export interface NewOrder<T extends OrderType> {
@@ -82,6 +86,7 @@ export interface NewOrder<T extends OrderType> {
     readonly owner: string;
     readonly orderType: T;
     readonly deferExec: boolean;
+    readonly postOnly?: boolean;
 }
 
 // Simplified order for users
@@ -317,6 +322,7 @@ export interface OrderBookSummary {
     min_order_size: string;
     tick_size: string;
     neg_risk: boolean;
+    last_trade_price: string;
     hash: string;
 }
 
@@ -522,4 +528,240 @@ export interface BuilderTrade {
     err_msg?: string | null;
     createdAt: string | null;
     updatedAt: string | null;
+}
+
+// RFQ Types
+export interface CancelRfqRequestParams {
+    requestId: string;
+}
+
+export interface CreateRfqRequestParams {
+    assetIn: string;
+    assetOut: string;
+    amountIn: string;
+    amountOut: string;
+    userType: number;
+}
+
+export interface RfqQuoteParams {
+    requestId: string;
+    assetIn: string;
+    assetOut: string;
+    amountIn: string;
+    amountOut: string;
+    userType: number;
+}
+
+export interface CreateRfqQuoteParams {
+    requestId: string;
+    assetIn: string;
+    assetOut: string;
+    amountIn: string;
+    amountOut: string;
+}
+
+export interface CancelRfqQuoteParams {
+    quoteId: string;
+}
+
+export interface AcceptQuoteParams {
+    requestId: string;
+    quoteId: string;
+    expiration: number;
+}
+
+export interface ApproveOrderParams {
+    requestId: string;
+    quoteId: string;
+    expiration: number;
+}
+
+export type RfqListState = "active" | "inactive";
+export type RfqSortDir = "asc" | "desc";
+export type RfqRequestsSortBy = "price" | "expiry" | "size" | "created";
+export type RfqQuotesSortBy = "price" | "expiry" | "created";
+
+export interface GetRfqQuotesParams {
+    /**
+     * Pagination cursor, base64-encoded integer (default "MA==" → 0)
+     */
+    offset?: string;
+    /**
+     * Integer (default 50, max 100)
+     */
+    limit?: number;
+    /**
+     * Optional; active | inactive (if omitted: no state filter)
+     */
+    state?: RfqListState;
+    /**
+     * Repeatable (UUIDs; invalid UUIDs are dropped server-side)
+     */
+    quoteIds?: string[];
+    /**
+     * Repeatable (UUIDs; invalid UUIDs are dropped server-side)
+     */
+    requestIds?: string[];
+    /**
+     * Repeatable (condition ids; must be 0x + 64 hex)
+     */
+    markets?: string[];
+    /**
+     * float (token size)
+     */
+    sizeMin?: number;
+    /**
+     * float (token size)
+     */
+    sizeMax?: number;
+    /**
+     * float (USDC size)
+     */
+    sizeUsdcMin?: number;
+    /**
+     * float (USDC size)
+     */
+    sizeUsdcMax?: number;
+    priceMin?: number;
+    priceMax?: number;
+    /**
+     * price | expiry | created (default created)
+     */
+    sortBy?: RfqQuotesSortBy;
+    /**
+     * asc | desc (default asc)
+     */
+    sortDir?: RfqSortDir;
+}
+export interface GetRfqBestQuoteParams {
+    requestId?: string;
+}
+
+export type RfqUserOrder = Pick<UserOrder, "price" | "size" | "side" | "tokenID">;
+
+export type RfqUserQuote = RfqUserOrder & { requestId: string };
+
+export interface GetRfqRequestsParams {
+    /**
+     * Pagination cursor, base64-encoded integer (default "MA==" → 0)
+     */
+    offset?: string;
+    /**
+     * Integer (default 50, max 100)
+     */
+    limit?: number;
+    /**
+     * Optional; active | inactive (if omitted: no state filter)
+     */
+    state?: RfqListState;
+    /**
+     * Repeatable (UUIDs; invalid UUIDs are dropped server-side)
+     */
+    requestIds?: string[];
+    /**
+     * Repeatable (condition ids; must be 0x + 64 hex)
+     */
+    markets?: string[];
+    /**
+     * float (token size)
+     */
+    sizeMin?: number;
+    /**
+     * float (token size)
+     */
+    sizeMax?: number;
+    /**
+     * float (USDC size)
+     */
+    sizeUsdcMin?: number;
+    /**
+     * float (USDC size)
+     */
+    sizeUsdcMax?: number;
+    priceMin?: number;
+    priceMax?: number;
+    /**
+     * price | expiry | size | created (default created)
+     */
+    sortBy?: RfqRequestsSortBy;
+    /**
+     * asc | desc (default asc)
+     */
+    sortDir?: RfqSortDir;
+}
+
+export interface RfqPaginatedResponse<T> {
+    readonly data: T[];
+    readonly next_cursor: string;
+    readonly limit: number;
+    readonly count: number;
+    readonly total_count?: number;
+}
+
+export interface RfqRequest {
+    readonly requestId: string;
+    readonly userAddress: string;
+    readonly proxyAddress: string;
+    readonly token: string;
+    readonly complement: string;
+    readonly condition: string;
+    readonly side: string;
+    readonly sizeIn: string;
+    readonly sizeOut: string;
+    readonly price: number;
+    readonly acceptedQuoteId: string;
+    readonly state: string;
+    readonly expiry: Date;
+    readonly createdAt: Date;
+    readonly updatedAt: Date;
+}
+
+export enum RfqMatchType {
+    COMPLEMENTARY = "COMPLEMENTARY",
+    MERGE = "MERGE",
+    MINT = "MINT",
+}
+
+export interface RfqQuote {
+    readonly quoteId: string;
+    readonly requestId: string;
+    readonly userAddress: string;
+    readonly proxyAddress: string;
+    readonly complement: string;
+    readonly condition: string;
+    readonly token: string;
+    readonly side: string;
+    readonly sizeIn: string;
+    readonly sizeOut: string;
+    readonly price: number;
+    readonly state: string;
+    readonly expiry: Date;
+    readonly matchType: string;
+    readonly createdAt: Date;
+    readonly updatedAt: Date;
+}
+
+export type RfqRequestsResponse = RfqPaginatedResponse<RfqRequest>;
+export type RfqQuotesResponse = RfqPaginatedResponse<RfqQuote>;
+
+export interface RfqRequestResponse {
+    readonly requestId: string;
+    readonly error?: string;
+}
+
+export interface RfqQuoteResponse {
+    readonly quoteId: string;
+    readonly error?: string;
+}
+
+export interface HeartbeatResponse {
+    readonly heartbeat_id: string;
+    readonly error?: string;
+}
+
+export interface RfqRequestOrderCreationPayload {
+    readonly token: string;
+    readonly side: Side;
+    readonly size: string;
+    readonly price: number;
 }

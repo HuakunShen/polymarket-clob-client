@@ -1,16 +1,21 @@
-import { Side as UtilsSide } from "@polymarket/order-utils";
-import type { SignedOrder } from "@polymarket/order-utils";
-import { OrderType, Side } from "./types.ts";
+import type { SignedOrder } from "./order-utils/index.ts";
+import { Side as UtilsSide } from "./order-utils/index.ts";
 import type { NewOrder, OrderBookSummary, TickSize } from "./types.ts";
+import { OrderType, Side } from "./types.ts";
 
 export function orderToJson<T extends OrderType>(
     order: SignedOrder,
     owner: string,
     orderType: T,
     deferExec = false,
+    postOnly?: boolean,
 ): NewOrder<T> {
+    if (postOnly === true && orderType !== OrderType.GTC && orderType !== OrderType.GTD) {
+        throw new Error("postOnly is only supported for GTC and GTD orders");
+    }
+
     let side = Side.BUY;
-    if (order.side == UtilsSide.BUY) {
+    if (order.side === UtilsSide.BUY) {
         side = Side.BUY;
     } else {
         side = Side.SELL;
@@ -19,7 +24,7 @@ export function orderToJson<T extends OrderType>(
     return {
         deferExec,
         order: {
-            salt: parseInt(order.salt, 10),
+            salt: Number.parseInt(order.salt, 10),
             maker: order.maker,
             signer: order.signer,
             taker: order.taker,
@@ -35,6 +40,7 @@ export function orderToJson<T extends OrderType>(
         },
         owner,
         orderType,
+        ...(typeof postOnly === "boolean" ? { postOnly } : {}),
     } as NewOrder<T>;
 }
 
@@ -93,16 +99,16 @@ export const generateOrderBookSummaryHash = async (
     orderbook.hash = "";
     const message = JSON.stringify(orderbook);
     const messageBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest("SHA-1", messageBuffer);
+    const hashBuffer = await globalThis.crypto.subtle.digest("SHA-1", messageBuffer);
     const hash = arrayBufferToHex(hashBuffer);
     orderbook.hash = hash;
     return hash;
 };
 
 export const isTickSizeSmaller = (a: TickSize, b: TickSize): boolean => {
-    return parseFloat(a) < parseFloat(b);
+    return Number.parseFloat(a) < Number.parseFloat(b);
 };
 
 export const priceValid = (price: number, tickSize: TickSize): boolean => {
-    return price >= parseFloat(tickSize) && price <= 1 - parseFloat(tickSize);
+    return price >= Number.parseFloat(tickSize) && price <= 1 - Number.parseFloat(tickSize);
 };

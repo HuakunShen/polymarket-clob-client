@@ -1,6 +1,3 @@
-/* eslint-disable max-len */
-import "mocha";
-import { expect } from "chai";
 import {
     decimalPlaces,
     generateOrderBookSummaryHash,
@@ -9,7 +6,7 @@ import {
     priceValid,
     roundDown,
 } from "../src/utilities.ts";
-import { Side as UtilsSide, SignatureType } from "@polymarket/order-utils";
+import { Side as UtilsSide, SignatureType } from "../src/order-utils/index.ts";
 import { Chain, OrderType, Side } from "../src/index.ts";
 import type { OrderBookSummary, UserMarketOrder, UserOrder } from "../src/index.ts";
 import { Wallet } from "@ethersproject/wallet";
@@ -60,6 +57,42 @@ describe("utilities", () => {
                 orderType: "GTD",
                 deferExec: false,
             });
+        });
+
+        it("includes postOnly when provided and validates orderType", () => {
+            const baseOrder = {
+                salt: "1000",
+                maker: "0x0000000000000000000000000000000000000001",
+                signer: "0x0000000000000000000000000000000000000002",
+                taker: "0x0000000000000000000000000000000000000003",
+                tokenId: "1",
+                makerAmount: "100000000",
+                takerAmount: "50000000",
+                side: UtilsSide.BUY,
+                expiration: "0",
+                nonce: "1",
+                feeRateBps: "100",
+                signatureType: SignatureType.POLY_GNOSIS_SAFE,
+                signature: "0x",
+            };
+
+            const jsonOrder = orderToJson(
+                baseOrder,
+                "aaaa-bbbb-cccc-dddd",
+                OrderType.GTC,
+                false,
+                true,
+            );
+            expect(jsonOrder).deep.include({
+                owner: "aaaa-bbbb-cccc-dddd",
+                orderType: "GTC",
+                deferExec: false,
+                postOnly: true,
+            });
+
+            expect(() =>
+                orderToJson(baseOrder, "aaaa-bbbb-cccc-dddd", OrderType.FOK, false, true),
+            ).to.throw("postOnly is only supported for GTC and GTD orders");
         });
 
         it("GTD sell", () => {
@@ -6844,13 +6877,14 @@ describe("utilities", () => {
             min_order_size: "15",
             tick_size: "0.001",
             neg_risk: false,
+            last_trade_price: "0",
             hash: "",
         } as OrderBookSummary;
 
         expect(await generateOrderBookSummaryHash(orderbook)).to.equal(
-            "d4d4e4ea0f1d86ce02d22704bd33414f45573e84",
+            "671cb98e93a82db4c16d49daaf72ef5b3286b50a",
         );
-        expect(orderbook.hash).to.equal("d4d4e4ea0f1d86ce02d22704bd33414f45573e84");
+        expect(orderbook.hash).to.equal("671cb98e93a82db4c16d49daaf72ef5b3286b50a");
     });
 
     it("isTickSizeSmaller", () => {
